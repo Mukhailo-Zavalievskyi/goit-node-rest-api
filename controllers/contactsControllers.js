@@ -1,94 +1,121 @@
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import User from "../models/users.js";
-import { registerUserSchema, loginUserSchema } from "../schemas/userSchema.js";
+import Contact from "../models/contacts.js";
+import {
+  createContactSchema,
+  updateContactSchema,
+} from "../schemas/contactsSchemas.js";
 
-export const register = async (req, res, next) => {
-  const { email, password } = req.body;
-
-  const { error } = registerUserSchema.validate({ email, password });
-  if (error) {
-    return res.status(400).json({ message: error.message });
-  }
-
+export const getAllContacts = async (req, res, next) => {
+  console.log(req.user);
   try {
-    const user = await User.findOne({ email });
+    const contacts = await Contact.find({ owner: req.user.id });
+    res.status(200).json(contacts);
+  } catch (error) {
+    next(error);
+  }
+};
 
-    if (user !== null) {
-      return res.status(409).json({ message: "Email in use" });
+export const getOneContact = async (req, res, next) => {
+  const { id } = req.params;
+  try {
+    const oneContact = await Contact.findOne({ _id: id, owner: req.user.id });
+
+    if (oneContact === null) {
+      return res.status(404).json({ message: "Not found" });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    res.status(200).json(oneContact);
+  } catch (error) {
+    next(error);
+  }
+};
 
-    await User.create({
-      email: email,
-      password: passwordHash,
+export const deleteContact = async (req, res, next) => {
+  const { id } = req.params;
+  try {
+    const deleteContact = await Contact.findOneAndDelete({
+      _id: id,
+      owner: req.user.id,
     });
-
-    res.status(201).json({ message: "Registration successful" });
+    if (deleteContact === null) {
+      res.status(404).json({ message: "Not found" });
+    }
+    res.status(200).json(deleteContact);
   } catch (error) {
     next(error);
   }
 };
 
-export const login = async (req, res, next) => {
-  const { email, password } = req.body;
+export const createContact = async (req, res, next) => {
+  const { name, email, phone } = req.body;
+  const contact = {
+    name,
+    email,
+    phone,
+    owner: req.user.id,
+  };
 
-  const { error } = loginUserSchema.validate({ email, password });
+  const { error } = createContactSchema.validate({ name, email, phone });
   if (error) {
     return res.status(400).json({ message: error.message });
   }
-
   try {
-    const user = await User.findOne({ email });
+    const addContact = await Contact.create(contact);
+    res.status(201).json(addContact);
+  } catch (error) {
+    next(error);
+  }
+};
 
-    if (user === null) {
-      console.log("Email");
-      return res.status(401).json({ message: "Email or password is wrong" });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (isMatch === false) {
-      console.log("Password");
-      return res.status(401).json({ message: "Email or password is wrong" });
-    }
-
-    const token = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: "2 days" }
+export const updateContact = async (req, res, next) => {
+  const { id } = req.params;
+  const { name, email, phone } = req.body;
+  if (!name && !email && !phone) {
+    return res
+      .status(400)
+      .json({ message: "Body must have at least one field" });
+  }
+  const { error } = updateContactSchema.validate({ name, email, phone });
+  if (error) {
+    return res.status(400).json({ message: error.message });
+  }
+  try {
+    const updateContact = await Contact.findOneAndUpdate(
+      {
+        _id: id,
+        owner: req.user.id,
+      },
+      req.body,
+      {
+        new: true,
+      }
     );
-
-    await User.findByIdAndUpdate(user._id, { token });
-
-    res.send({ token });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const logout = async (req, res, next) => {
-  try {
-    await User.findByIdAndUpdate(req.user.id, { token: null });
-    res.status(204).end();
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const currentUser = async (req, res, next) => {
-  const { id } = req.user;
-  try {
-    const userById = await User.findById(id);
-
-    if (userById === null) {
-      return res.status(401).json({ message: "Not authorized" });
+    if (updateContact === null) {
+      res.status(404).json({ message: "Not found" });
     }
+    res.status(200).json(updateContact);
+  } catch (error) {
+    next(error);
+  }
+};
 
-    res
-      .status(200)
-      .json({ email: userById.email, subscription: userById.subscription });
+export const updateStatusContact = async (req, res, next) => {
+  const { id } = req.params;
+  const { favorite } = req.body;
+  try {
+    const updateStatusContact = await Contact.findOneAndUpdate(
+      {
+        _id: id,
+        owner: req.user.id,
+      },
+      { favorite },
+      {
+        new: true,
+      }
+    );
+    if (updateStatusContact === null) {
+      res.status(404).json({ message: "Not found" });
+    }
+    res.status(200).json(updateStatusContact);
   } catch (error) {
     next(error);
   }
